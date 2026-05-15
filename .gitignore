@@ -144,3 +144,4 @@ config/upload.config.json
 /tests
 /plans
 /specs
+.ace-tool/
