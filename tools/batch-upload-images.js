@@ -2,8 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { HuijiWiki } = require('huijiwiki-api');
 const { ProgressTracker, UploadLog } = require('../lib/progress-tracker');
+const { loginWithDiagnostics } = require('../lib/wiki-login');
 const {
   collectImages,
   transformPath,
@@ -160,6 +160,16 @@ function printProgress(event) {
   }
 }
 
+function requireHuijiWiki() {
+  try {
+    return require('huijiwiki-api').HuijiWiki;
+  } catch (error) {
+    throw new Error(
+      'Missing dependency "huijiwiki-api". Run npm install before actual uploads.'
+    );
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const options = parseArgs(args);
@@ -244,7 +254,10 @@ async function main() {
       filesToProcess = filesToProcess.filter(f => !uploadLog.isUploaded(f));
     }
 
-    tracker.init(options.source, filesToProcess);
+    tracker.init(options.source, filesToProcess, {
+      taskType: 'image',
+      sourceType: 'directory'
+    });
     console.log(`Task ${tracker.data.taskId} created: ${filesToProcess.length} files to upload`);
   }
 
@@ -256,11 +269,14 @@ async function main() {
   let wiki = null;
 
   if (!options.dryRun) {
+    const HuijiWiki = requireHuijiWiki();
     console.log(`Connecting to wiki: ${config.wiki.prefix}`);
     wiki = new HuijiWiki(config.wiki.prefix, config.wiki.authKey);
 
     console.log('Logging in...');
-    const loginSuccess = await wiki.apiLogin(config.auth.username, config.auth.password);
+    const loginSuccess = await loginWithDiagnostics(wiki, config.auth.username, config.auth.password, {
+      logRawResponse: message => console.log(message)
+    });
 
     if (!loginSuccess) {
       console.error(`Login failed: ${wiki.getLastErrorMessage()}`);

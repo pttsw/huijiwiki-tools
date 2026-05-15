@@ -9,7 +9,9 @@
   "scripts": {
     "upload": "node tools/batch-upload-images.js",
     "upload:dry-run": "node tools/batch-upload-images.js --dry-run",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "upload:pages": "node tools/batch-upload-pages.js",
+    "upload:pages:dry-run": "node tools/batch-upload-pages.js --dry-run",
+    "test": "node --test"
   },
   "dependencies": {
     "huijiwiki-api": "^0.8.4"

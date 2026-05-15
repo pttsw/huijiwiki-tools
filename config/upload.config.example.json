@@ -11,6 +11,12 @@
     "comment": "Batch image upload",
     "maxConcurrency": 10
   },
+  "pageUpload": {
+    "comment": "Batch page upload",
+    "maxConcurrency": 5,
+    "defaultExtensions": [".txt", ".wiki", ".wikitext", ".md"],
+    "skipExisting": true
+  },
   "categoryMapping": {
     "adventure": "模组",
     "backgrounds": "背景",
