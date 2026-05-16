@@ -14,8 +14,11 @@
   "pageUpload": {
     "comment": "Batch page upload",
     "maxConcurrency": 5,
-    "defaultExtensions": [".txt", ".wiki", ".wikitext", ".md"],
-    "skipExisting": true
+    "defaultExtensions": [".txt", ".wiki", ".wikitext", ".md", ".json"],
+    "skipExisting": true,
+    "rootPath": null,
+    "enableParentPage": true,
+    "excludeParentPagePaths": []
   },
   "categoryMapping": {
     "adventure": "模组",

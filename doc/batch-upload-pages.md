@@ -48,6 +48,9 @@ cp config/upload.config.example.json config/upload.config.json
 | `pageUpload.maxConcurrency` | 最大并发上传数 |
 | `pageUpload.defaultExtensions` | 目录模式默认扫描扩展名 |
 | `pageUpload.skipExisting` | 文档化默认策略；实际覆盖由 `--overwrite` 控制 |
+| `pageUpload.rootPath` | 默认上传根路径，配置后不用每次都指定 `--source` |
+| `pageUpload.enableParentPage` | 是否将上级文件夹作为父页面，默认 `true` |
+| `pageUpload.excludeParentPagePaths` | 排除路径数组，这些路径下的文件不应用父页面规则 |
 
 ## 使用方法
 
@@ -62,16 +65,19 @@ npm run upload:pages -- -s ./pages
 
 目录模式标题规则：
 
-- 去掉文件扩展名
-- 相对路径 `/` 转为 `-`
-- 然后执行标题规范化
+- 上级文件夹视为父页面，路径直接作为标题（如 `output/book/ABH/0a7.json` → `book/ABH/0a7`）
+- 如果是 `.json` 文件，会自动加上 `Data:` 前缀
+- 可以通过 `enableParentPage` 配置项开关此功能
+- 可以通过 `excludeParentPagePaths` 配置项排除特定路径
 
 示例：
 
-| 文件路径 | 页面标题 |
-|----------|----------|
-| `法术/火球术.txt` | `法术:火球术` |
-| `spells/FTD/Ashardalon's Stride.wiki` | `spells:FTD:Ashardalon's Stride` |
+| 文件路径 | `enableParentPage` | 页面标题 |
+|----------|-------------------|----------|
+| `output/book/ABH/0a7.json` | `true` | `Data:book/ABH/0a7` |
+| `output/book/ABH/0a7.json` | `false` | `Data:book-ABH-0a7` |
+| `法术/火球术.txt` | `true` | `法术/火球术` |
+| `法术/火球术.txt` | `false` | `法术:火球术` |
 
 ### JSON 清单模式
 
@@ -94,6 +100,8 @@ node tools/batch-upload-pages.js -m ./pages.json -c ./config/upload.config.json
   }
 ]
 ```
+
+**注意：使用 JSON 清单模式上传时，所有页面标题会自动加上 `Data:` 前缀**
 
 ## 预览模式
 
@@ -169,12 +177,18 @@ node tools/batch-upload-pages.js --retry-failed ./page-upload-progress.json
 
 | 字符 | 处理方式 |
 |------|----------|
-| `/` | 转换为 `:` |
-| `#`, `<`, `>`, `[`, `]`, `{`, `}`, `\|` | 转换为 `_` |
+| `_0_` | 转换为 `\` |
+| `_1_` | 转换为 `/` |
+| `_2_` | 转换为 `:` |
+| `_3_` | 转换为 `*` |
+| `_4_` | 转换为 `"` |
+| `_5_` | 转换为 `<` |
+| `_6_` | 转换为 `>` |
+| `_7_` | 转换为 `\|` |
+| `_8_` | 转换为 `?` |
+| `#`, `[`, `]`, `{`, `}` | 转换为 `_` |
 | 连续空白 | 压缩为单个空格 |
 | 首尾空白 | 去除 |
-| 多个连续 `:` | 压缩为单个 `:` |
-| 标题首尾 `:` | 去除 |
 
 ### 说明
 

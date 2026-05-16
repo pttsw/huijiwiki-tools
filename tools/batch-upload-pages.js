@@ -99,6 +99,19 @@ function validateInputMode(options) {
   }
 }
 
+function resolveSourcePath(options, config) {
+  if (options.source) {
+    return options.source;
+  }
+  
+  const rootPath = config?.pageUpload?.rootPath;
+  if (rootPath && fs.existsSync(rootPath)) {
+    return rootPath;
+  }
+  
+  return null;
+}
+
 function normalizeConcurrency(value) {
   return Number.isFinite(value) ? Math.max(1, Math.floor(value)) : null;
 }
@@ -139,13 +152,16 @@ Options:
   -c, --config <file>       Config file path (default: ./config/upload.config.json)
   --progress-file <file>    Progress file path (default: ./page-upload-progress.json)
   --log-file <file>         Upload log file path (default: ./logs/page-upload.log)
-  --resume <file>           Resume from a progress file
-  --retry-failed <file>     Retry only failed items from a progress file
+  --resume <file>          Resume from a progress file
+  --retry-failed <file>   Retry only failed items from a progress file
   --dry-run                 Preview without uploading
   --overwrite               Overwrite existing pages instead of skipping them
   --concurrency <n>         Number of concurrent uploads
   --extensions <list>       Directory-mode file extensions, comma-separated
   -h, --help                Show this help message
+
+Note:
+  If --source can be omitted if rootPath is configured in config.
 `);
 }
 
@@ -324,17 +340,21 @@ async function processPageQueue(wiki, items, config, tracker, uploadLog, options
 }
 
 function loadItemsForNewTask(options, config) {
-  if (options.source) {
-    if (!fs.existsSync(options.source)) {
-      throw new Error(`Source directory not found: ${options.source}`);
+  let actualSource = resolveSourcePath(options, config);
+  
+  if (actualSource) {
+    if (!fs.existsSync(actualSource)) {
+      throw new Error(`Source directory not found: ${actualSource}`);
     }
 
     return {
-      items: loadPagesFromDirectory(options.source, {
+      items: loadPagesFromDirectory(actualSource, {
         extensions: getPageExtensions(options, config),
-        skipFolders: config.skipFolders || []
+        skipFolders: config.skipFolders || [],
+        enableParentPage: config?.pageUpload?.enableParentPage ?? true,
+        excludeParentPagePaths: config?.pageUpload?.excludeParentPagePaths || []
       }),
-      sourceDir: options.source,
+      sourceDir: actualSource,
       metadata: {
         taskType: 'page',
         sourceType: 'directory'
@@ -365,9 +385,14 @@ async function main() {
     process.exit(0);
   }
 
-  validateInputMode(options);
-
   const config = loadConfig(options.config);
+  
+  if (!options.source && !options.manifest && !options.resume && !options.retryFailed) {
+    options.source = resolveSourcePath(options, config);
+  }
+  
+  validateInputMode(options);
+  
   options.concurrency = resolveConcurrency(options.concurrency, config);
 
   const tracker = new ProgressTracker(options.progressFile);
@@ -376,6 +401,13 @@ async function main() {
   let items = [];
   let sourceDir = null;
   let metadata = { taskType: 'page', sourceType: 'directory' };
+
+  const loaderOptions = {
+    extensions: getPageExtensions(options, config),
+    skipFolders: config.skipFolders || [],
+    enableParentPage: config?.pageUpload?.enableParentPage ?? true,
+    excludeParentPagePaths: config?.pageUpload?.excludeParentPagePaths || []
+  };
 
   if (options.resume) {
     tracker.filePath = options.resume;
@@ -393,10 +425,7 @@ async function main() {
 
     const loaded = data.sourceType === 'manifest'
       ? loadPagesFromManifest(data.manifestPath)
-      : loadPagesFromDirectory(sourceDir, {
-          extensions: getPageExtensions(options, config),
-          skipFolders: config.skipFolders || []
-        });
+      : loadPagesFromDirectory(sourceDir, loaderOptions);
     const itemMap = createItemMap(loaded);
     items = tracker.getPendingFiles().map(itemId => itemMap.get(itemId)).filter(Boolean);
   } else if (options.retryFailed) {
@@ -415,10 +444,7 @@ async function main() {
 
     const loaded = data.sourceType === 'manifest'
       ? loadPagesFromManifest(data.manifestPath)
-      : loadPagesFromDirectory(sourceDir, {
-          extensions: getPageExtensions(options, config),
-          skipFolders: config.skipFolders || []
-        });
+      : loadPagesFromDirectory(sourceDir, loaderOptions);
     const itemMap = createItemMap(loaded);
     items = tracker.getFailedFiles().map(itemId => itemMap.get(itemId)).filter(Boolean);
     data.pendingFiles = items.map(item => item.itemId);
