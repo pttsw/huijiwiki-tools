@@ -242,16 +242,23 @@ async function uploadSinglePage(wiki, item, options, summary) {
     return { success: true, skipped: true, message: 'Already exists' };
   }
 
-  const result = await wiki.editPage(normalizedTitle, item.content, {
-    isBot: true,
-    summary: item.summary || summary
-  });
+  try {
+    const result = await wiki.editPage(normalizedTitle, item.content, {
+      isBot: true,
+      summary: item.summary || summary
+    });
 
-  if (result.error) {
-    return { success: false, error: `${result.error.code}: ${result.error.info}` };
+    if (result.error) {
+      return { success: false, error: `${result.error.code}: ${result.error.info}` };
+    }
+
+    return { success: true, skipped: false };
+  } catch (error) {
+    if (error.response && error.response.status === 413) {
+      return { success: false, error: 'Request entity too large (413)', statusCode: 413 };
+    }
+    throw error;
   }
-
-  return { success: true, skipped: false };
 }
 
 function createItemMap(items) {
@@ -270,7 +277,9 @@ async function processPageQueue(wiki, items, config, tracker, uploadLog, options
   let completed = 0;
   let failed = 0;
   let skipped = 0;
+  let tooLarge = 0;
   let nextIndex = 0;
+  const tooLargeFiles = [];
 
   async function worker() {
     while (true) {
@@ -323,12 +332,20 @@ async function processPageQueue(wiki, items, config, tracker, uploadLog, options
         tracker.markCompleted(itemId);
         uploadLog.logSuccess(itemId, wikiPrefix);
       } else {
-        if (onProgress) {
-          onProgress({ type: 'error', file: item.title, message: result.error });
+        if (result.statusCode === 413) {
+          if (onProgress) {
+            onProgress({ type: 'skip', file: normalizedTitle, reason: 'Content too large (413)' });
+          }
+          tooLarge++;
+          tooLargeFiles.push({ title: normalizedTitle, rawTitle: item.rawTitle, contentLength: item.content?.length });
+        } else {
+          if (onProgress) {
+            onProgress({ type: 'error', file: item.title, message: result.error });
+          }
+          tracker.markFailed(itemId, result.error);
+          uploadLog.logFailed(itemId, result.error);
+          failed++;
         }
-        tracker.markFailed(itemId, result.error);
-        uploadLog.logFailed(itemId, result.error);
-        failed++;
       }
     }
   }
@@ -336,7 +353,7 @@ async function processPageQueue(wiki, items, config, tracker, uploadLog, options
   const workerCount = Math.max(1, concurrency || 1);
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-  return { completed, failed, skipped };
+  return { completed, failed, skipped, tooLarge, tooLargeFiles };
 }
 
 function loadItemsForNewTask(options, config) {
@@ -493,6 +510,15 @@ async function main() {
   console.log(`Completed: ${result.completed}`);
   console.log(`Skipped: ${result.skipped}`);
   console.log(`Failed: ${result.failed}`);
+  
+  if (result.tooLarge && result.tooLargeFiles.length > 0) {
+    console.log(`\n⚠️  Too Large (skipped): ${result.tooLarge}`);
+    console.log('\nFiles skipped due to size limit (413):');
+    for (const file of result.tooLargeFiles) {
+      console.log(`  - ${file.title} (${(file.contentLength / 1024).toFixed(1)} KB)`);
+    }
+    console.log('\nPlease manually upload these files or reduce their size.');
+  }
 }
 
 if (require.main === module) {
