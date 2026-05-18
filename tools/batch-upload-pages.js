@@ -222,27 +222,27 @@ async function uploadSinglePage(wiki, item, options, summary) {
     return { success: false, error: 'Empty title after normalization' };
   }
 
-  const exists = wiki ? await pageExists(wiki, normalizedTitle) : false;
-  const action = decidePageAction({ exists, overwrite: options.overwrite });
-
-  if (options.dryRun) {
-    return {
-      success: true,
-      dryRun: buildDryRunEvent({
-        rawTitle,
-        normalizedTitle,
-        exists,
-        action,
-        content: item.content
-      })
-    };
-  }
-
-  if (action === 'skip') {
-    return { success: true, skipped: true, message: 'Already exists' };
-  }
-
   try {
+    const exists = wiki ? await pageExists(wiki, normalizedTitle) : false;
+    const action = decidePageAction({ exists, overwrite: options.overwrite });
+
+    if (options.dryRun) {
+      return {
+        success: true,
+        dryRun: buildDryRunEvent({
+          rawTitle,
+          normalizedTitle,
+          exists,
+          action,
+          content: item.content
+        })
+      };
+    }
+
+    if (action === 'skip') {
+      return { success: true, skipped: true, message: 'Already exists' };
+    }
+
     const result = await wiki.editPage(normalizedTitle, item.content, {
       isBot: true,
       summary: item.summary || summary
@@ -254,10 +254,25 @@ async function uploadSinglePage(wiki, item, options, summary) {
 
     return { success: true, skipped: false };
   } catch (error) {
-    if (error.response && error.response.status === 413) {
-      return { success: false, error: 'Request entity too large (413)', statusCode: 413 };
+    let errorMessage = String(error.message || error);
+    let statusCode = null;
+
+    if (error.response) {
+      statusCode = error.response.status;
+      errorMessage = `HTTP ${statusCode}: ${error.response.statusText || error.message}`;
+      
+      if (error.response.data) {
+        if (error.response.data.error) {
+          errorMessage = `${error.response.data.error.code}: ${error.response.data.error.info}`;
+        } else if (typeof error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+      }
+    } else if (error.code) {
+      errorMessage = `Network error (${error.code}): ${error.message}`;
     }
-    throw error;
+
+    return { success: false, error: errorMessage, statusCode };
   }
 }
 
@@ -277,9 +292,11 @@ async function processPageQueue(wiki, items, config, tracker, uploadLog, options
   let completed = 0;
   let failed = 0;
   let skipped = 0;
-  let tooLarge = 0;
   let nextIndex = 0;
-  const tooLargeFiles = [];
+  
+  // 收集所有失败和被跳过的文件信息（除了"已存在"的跳过情况
+  const failedFiles = [];
+  const skippedFiles = [];
 
   async function worker() {
     while (true) {
@@ -332,16 +349,30 @@ async function processPageQueue(wiki, items, config, tracker, uploadLog, options
         tracker.markCompleted(itemId);
         uploadLog.logSuccess(itemId, wikiPrefix);
       } else {
+        // 所有失败都被归类到 failed 或 skipped 中
+        if (onProgress) {
+          onProgress({ type: 'error', file: normalizedTitle, message: result.error });
+        }
+        
+        // 根据不同的错误类型分类收集
+        const fileInfo = { 
+          title: normalizedTitle, 
+          rawTitle: item.rawTitle || item.title, 
+          contentLength: item.content?.length,
+          error: result.error,
+          statusCode: result.statusCode
+        };
+        
         if (result.statusCode === 413) {
-          if (onProgress) {
-            onProgress({ type: 'skip', file: normalizedTitle, reason: 'Content too large (413)' });
-          }
-          tooLarge++;
-          tooLargeFiles.push({ title: normalizedTitle, rawTitle: item.rawTitle, contentLength: item.content?.length });
+          skippedFiles.push({ 
+            ...fileInfo, 
+            category: 'Too large'
+          });
         } else {
-          if (onProgress) {
-            onProgress({ type: 'error', file: item.title, message: result.error });
-          }
+          failedFiles.push({ 
+            ...fileInfo, 
+            category: 'Failed'
+          });
           tracker.markFailed(itemId, result.error);
           uploadLog.logFailed(itemId, result.error);
           failed++;
@@ -353,7 +384,13 @@ async function processPageQueue(wiki, items, config, tracker, uploadLog, options
   const workerCount = Math.max(1, concurrency || 1);
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-  return { completed, failed, skipped, tooLarge, tooLargeFiles };
+  return { 
+    completed, 
+    failed, 
+    skipped, 
+    failedFiles,
+    skippedFiles
+  };
 }
 
 function loadItemsForNewTask(options, config) {
@@ -508,16 +545,84 @@ async function main() {
 
   console.log('\n========== Page Upload Complete ==========');
   console.log(`Completed: ${result.completed}`);
-  console.log(`Skipped: ${result.skipped}`);
+  console.log(`Skipped (already exists): ${result.skipped}`);
   console.log(`Failed: ${result.failed}`);
   
-  if (result.tooLarge && result.tooLargeFiles.length > 0) {
-    console.log(`\n⚠️  Too Large (skipped): ${result.tooLarge}`);
-    console.log('\nFiles skipped due to size limit (413):');
-    for (const file of result.tooLargeFiles) {
-      console.log(`  - ${file.title} (${(file.contentLength / 1024).toFixed(1)} KB)`);
+  const hasErrors = (result.failedFiles && result.failedFiles.length > 0) || 
+                    (result.skippedFiles && result.skippedFiles.length > 0);
+  
+  if (!hasErrors) {
+    console.log('\n✅ All files uploaded successfully!');
+    return;
+  }
+  
+  console.log('\n──────────────────────────────────────────────');
+  console.log('❌ UNUPLOADED FILES REPORT');
+  console.log('──────────────────────────────────────────────');
+  
+  // 处理跳过的文件（如太大的文件）
+  if (result.skippedFiles && result.skippedFiles.length > 0) {
+    console.log(`\n⚠️  SKIPPED FILES (${result.skippedFiles.length}):`);
+    
+    const tooLargeFiles = result.skippedFiles.filter(f => f.category === 'Too large');
+    if (tooLargeFiles.length > 0) {
+      console.log(`  -- Content too large (413) --`);
+      for (const file of tooLargeFiles) {
+        const sizeStr = file.contentLength ? `(${Math.round(file.contentLength / 1024)} KB)` : '';
+        console.log(`  • ${file.title} ${sizeStr}`);
+        console.log(`    Reason: ${file.error}`);
+      }
     }
-    console.log('\nPlease manually upload these files or reduce their size.');
+    
+    const otherSkipped = result.skippedFiles.filter(f => f.category !== 'Too large');
+    if (otherSkipped.length > 0) {
+      console.log(`  -- Other skipped --`);
+      for (const file of otherSkipped) {
+        const sizeStr = file.contentLength ? `(${Math.round(file.contentLength / 1024)} KB)` : '';
+        console.log(`  • ${file.title} ${sizeStr}`);
+        console.log(`    Reason: ${file.error}`);
+      }
+    }
+  }
+  
+  // 处理失败的文件
+  if (result.failedFiles && result.failedFiles.length > 0) {
+    console.log(`\n❌ FAILED FILES (${result.failedFiles.length}):`);
+    
+    // 按错误类型分组
+    const errorGroups = {};
+    for (const file of result.failedFiles) {
+      const key = file.error.substring(0, 60);
+      if (!errorGroups[key]) {
+        errorGroups[key] = {
+          error: file.error,
+          files: []
+        };
+      }
+      errorGroups[key].files.push(file);
+    }
+    
+    for (const [key, group] of Object.entries(errorGroups)) {
+      console.log(`  -- ${group.error.substring(0, 60)}${group.error.length > 60 ? '...' : ''} --`);
+      for (const file of group.files) {
+        const sizeStr = file.contentLength ? `(${Math.round(file.contentLength / 1024)} KB)` : '';
+        console.log(`  • ${file.title} ${sizeStr}`);
+      }
+    }
+    
+    console.log('\nDetailed error list:');
+    for (const file of result.failedFiles) {
+      const sizeStr = file.contentLength ? `(${Math.round(file.contentLength / 1024)} KB)` : '';
+      console.log(`  • ${file.title} ${sizeStr}`);
+      console.log(`    Error: ${file.error}`);
+    }
+  }
+  
+  console.log('\n──────────────────────────────────────────────');
+  const totalUnuploaded = (result.failedFiles?.length || 0) + (result.skippedFiles?.length || 0);
+  if (totalUnuploaded > 0) {
+    console.log(`📝 ${totalUnuploaded} file(s) were not uploaded successfully.`);
+    console.log('💡 You can use --retry-failed to retry failed files.');
   }
 }
 

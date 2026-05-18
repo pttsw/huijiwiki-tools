@@ -73,8 +73,8 @@ node tools/batch-upload-pages.js
 
 | 文件路径 | 页面标题 |
 |----------|----------|
-| `法术/火球术.txt` | `法术:火球术` |
-| `spells/FTD/Ashardalon's Stride.wiki` | `spells:FTD:Ashardalon's Stride` |
+| `法术/火球术.txt` | `法术/火球术` |
+| `spells/FTD/Ashardalon's Stride.wiki` | `spells/FTD/Ashardalon's Stride` |
 
 ### JSON 清单模式
 
