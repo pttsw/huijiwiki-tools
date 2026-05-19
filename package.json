@@ -11,6 +11,10 @@
     "upload:dry-run": "node tools/batch-upload-images.js --dry-run",
     "upload:pages": "node tools/batch-upload-pages.js",
     "upload:pages:dry-run": "node tools/batch-upload-pages.js --dry-run",
+    "get:page": "node tools/batch-upload-pages.js --config ./config/upload.config.page.json",
+    "get:page:dry-run": "node tools/batch-upload-pages.js --config ./config/upload.config.page.json --dry-run",
+    "get:json": "node tools/batch-upload-pages.js --config ./config/upload.config.output.json",
+    "get:json:dry-run": "node tools/batch-upload-pages.js --config ./config/upload.config.output.json --dry-run",
     "test": "node --test"
   },
   "dependencies": {

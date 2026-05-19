@@ -27,6 +27,8 @@ npm install
 cp config/upload.config.example.json config/upload.config.json
 ```
 
+或直接使用upload.config.output.json与upload.config.page.json文件。
+
 新增页面上传配置：
 
 ```json
@@ -48,10 +50,29 @@ cp config/upload.config.example.json config/upload.config.json
 | `pageUpload.maxConcurrency` | 最大并发上传数 |
 | `pageUpload.defaultExtensions` | 目录模式默认扫描扩展名 |
 | `pageUpload.skipExisting` | 文档化默认策略；实际覆盖由 `--overwrite` 控制 |
+| `pageUpload.rootPath` | 目录模式默认上传路径 |
+| `pageUpload.enableParentPage` | 是否创建父页面 |
+| `pageUpload.excludeParentPagePaths` | 无视pageUpload.enableParentPage规则的文件路径 |
 
 ## 使用方法
 
 ### 目录文件模式
+
+使用脚本自带的两种默认配置，分别用于上传json文件和普通文件，上传前记得确认配置文件里的rootPath路径是否正确。
+
+```bash
+# 上传json文件用
+npm run get:json
+# 预览
+npm run get:page:dry-run
+
+# 上传普通文件用
+npm run get:page
+# 预览
+npm run get:page:dry-run
+```
+
+或者使用自定义上传配置文件：
 
 ```bash
 node tools/batch-upload-pages.js -s ./pages -c ./config/upload.config.json
