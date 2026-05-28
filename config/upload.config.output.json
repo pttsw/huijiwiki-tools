@@ -1,11 +1,11 @@
 {
   "wiki": {
-    "prefix": "dnd5e",
-    "authKey": "your-auth-key-here"
+    "prefix": "dnd",
+    "authKey": "rGLJU24Lg9zDUU"
   },
   "auth": {
-    "username": "YourUsername@BotName",
-    "password": "your-bot-password"
+    "username": "犹格bot",
+    "password": "trpg123456"
   },
   "upload": {
     "comment": "Batch image upload",
@@ -16,7 +16,7 @@
     "maxConcurrency": 5,
     "defaultExtensions": [".json"],
     "skipExisting": true,
-    "rootPath": "/output",
+    "rootPath": "C:\\Users\\rukee\\Documents\\ai用\\ai\\wiki-dnd-parser\\output",
     "enableParentPage": true,
     "excludeParentPagePaths": [
 		"collection",
