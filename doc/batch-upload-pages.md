@@ -29,6 +29,8 @@ cp config/upload.config.example.json config/upload.config.json
 
 或直接使用upload.config.output.json与upload.config.page.json文件。
 
+可在 config\upload.auth.json 中配置上传脚本的机器人信息，若上传用的 upload.config.json 中未配置，则使用 config\upload.auth.json 配置。
+
 新增页面上传配置：
 
 ```json
