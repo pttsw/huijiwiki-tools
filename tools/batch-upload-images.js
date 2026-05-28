@@ -129,7 +129,32 @@ function loadConfig(configPath) {
     throw new Error(`Config file not found: ${configPath}`);
   }
   const content = fs.readFileSync(configPath, 'utf-8');
-  return JSON.parse(content);
+  const config = JSON.parse(content);
+  
+  // 尝试从 upload.auth.json 加载默认认证配置
+  const authConfigPath = path.join(path.dirname(configPath), 'upload.auth.json');
+  if (fs.existsSync(authConfigPath)) {
+    try {
+      const authConfig = JSON.parse(fs.readFileSync(authConfigPath, 'utf8'));
+      
+      // 检查是否是默认值，如果是，则从 authConfig 替换
+      const isDefaultWikiConfig = config.wiki?.prefix === 'dnd5e' || 
+                                  config.wiki?.authKey === 'your-auth-key-here';
+      const isDefaultAuthConfig = config.auth?.username?.includes('YourUsername@BotName') || 
+                                  config.auth?.password === 'your-bot-password';
+      
+      if (isDefaultWikiConfig && authConfig.wiki) {
+        config.wiki = authConfig.wiki;
+      }
+      if (isDefaultAuthConfig && authConfig.auth) {
+        config.auth = authConfig.auth;
+      }
+    } catch (error) {
+      console.warn(`读取认证配置文件时出错: ${error.message}`);
+    }
+  }
+
+  return config;
 }
 
 function printProgress(event) {

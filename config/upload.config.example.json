@@ -15,7 +15,7 @@
     "comment": "Batch page upload",
     "maxConcurrency": 5,
     "defaultExtensions": [".txt", ".wiki", ".wikitext", ".md", ".json"],
-    "skipExisting": true,
+    "skipExisting": false,
     "rootPath": null,
     "enableParentPage": true,
     "excludeParentPagePaths": []

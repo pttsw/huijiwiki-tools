@@ -140,6 +140,7 @@ vite.config.ts.timestamp-*
 upload-progress.json
 /images
 config/upload.config.json
+config/upload.auth.json
 /.codanna
 /tests
 /plans

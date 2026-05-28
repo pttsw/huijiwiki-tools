@@ -19,6 +19,7 @@ function parseArgs(args) {
     retryFailed: null,
     dryRun: false,
     overwrite: false,
+    skipExisting: false,
     concurrency: null,
     extensions: null,
     file: null,
@@ -87,6 +88,9 @@ function parseArgs(args) {
       case '-f':
         options.file = next;
         i++;
+        break;
+      case '--skip-existing':
+        options.skipExisting = true;
         break;
       case '-h':
       case '--help':
@@ -182,7 +186,8 @@ function printHelp() {
   --resume <文件>             从进度文件恢复上传
   --retry-failed <文件>      重试失败的文件
   --dry-run                  预览模式，不实际执行上传
-  --overwrite                覆盖已存在的页面而不是跳过
+  --overwrite                覆盖已存在的页面（默认行为）
+  --skip-existing            跳过已存在的页面而不是覆盖
   --concurrency <数量>        并发上传数量
   --extensions <列表>          目录模式的文件扩展名，逗号分隔
   --file <文件夹>             只上传指定文件夹的文件（需要配置rootPath）
@@ -192,6 +197,7 @@ function printHelp() {
 说明:
   如果配置了 rootPath，可以省略 --source 参数。
   使用 --file 可以只上传指定文件夹的文件。如果文件夹不存在，会报错。
+  默认行为是覆盖已存在的页面。如需跳过，使用 --skip-existing 参数。
 `);
 }
 
@@ -200,7 +206,32 @@ function loadConfig(configPath) {
     throw new Error(`配置文件未找到: ${configPath}`);
   }
 
-  return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  
+  // 尝试从 upload.auth.json 加载默认认证配置
+  const authConfigPath = path.join(path.dirname(configPath), 'upload.auth.json');
+  if (fs.existsSync(authConfigPath)) {
+    try {
+      const authConfig = JSON.parse(fs.readFileSync(authConfigPath, 'utf8'));
+      
+      // 检查是否是默认值，如果是，则从 authConfig 替换
+      const isDefaultWikiConfig = config.wiki?.prefix === 'dnd5e' || 
+                                  config.wiki?.authKey === 'your-auth-key-here';
+      const isDefaultAuthConfig = config.auth?.username?.includes('YourUsername@BotName') || 
+                                  config.auth?.password === 'your-bot-password';
+      
+      if (isDefaultWikiConfig && authConfig.wiki) {
+        config.wiki = authConfig.wiki;
+      }
+      if (isDefaultAuthConfig && authConfig.auth) {
+        config.auth = authConfig.auth;
+      }
+    } catch (error) {
+      console.warn(`读取认证配置文件时出错: ${error.message}`);
+    }
+  }
+
+  return config;
 }
 
 function printProgress(event) {
@@ -479,6 +510,14 @@ async function main() {
   validateInputMode(options);
   
   options.concurrency = resolveConcurrency(options.concurrency, config);
+  
+  // 如果指定了 --skip-existing，则强制设置为跳过
+  if (options.skipExisting) {
+    options.overwrite = false;
+  } else if (options.overwrite === false && config?.pageUpload?.skipExisting !== undefined) {
+    // 否则，使用配置文件中的值（skipExisting 为 false 时表示要覆盖）
+    options.overwrite = !config.pageUpload.skipExisting;
+  }
 
   const tracker = new ProgressTracker(options.progressFile);
   const uploadLog = new UploadLog(options.logFile);
