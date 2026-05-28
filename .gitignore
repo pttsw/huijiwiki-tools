@@ -147,3 +147,7 @@ config/upload.auth.json
 /specs
 .ace-tool/
 /test
+
+# 忽略上传相关的敏感配置和临时输出文件
+config/upload.config.output.json
+config/upload.config.page.json
