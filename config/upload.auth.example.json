@@ -1,0 +1,10 @@
+{
+  "wiki": {
+    "prefix": "dnd5e",
+    "authKey": "your-auth-key-here"
+  },
+  "auth": {
+    "username": "YourUsername@BotName",
+    "password": "your-bot-password"
+  }
+}
