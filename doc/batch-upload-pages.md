@@ -64,12 +64,16 @@ cp config/upload.config.example.json config/upload.config.json
 # 上传json文件用
 npm run get:json
 # 预览
-npm run get:page:dry-run
+npm run get:json:dry-run
+# 指定子文件夹上传
+npm run get:json -- --file <folder>
 
 # 上传普通文件用
 npm run get:page
 # 预览
 npm run get:page:dry-run
+# 指定子文件夹上传
+npm run get:page -- --file <folder>
 ```
 
 或者使用自定义上传配置文件：
@@ -166,6 +170,7 @@ node tools/batch-upload-pages.js --retry-failed ./page-upload-progress.json
 | `-s, --source <dir>` | 目录文件模式输入目录 | - |
 | `-m, --manifest <file>` | JSON 清单模式输入文件 | - |
 | `-c, --config <file>` | 配置文件路径 | `./config/upload.config.json` |
+| `-file, --file <file>` | 指定上传文件路径模式 | - |
 | `--progress-file <file>` | 进度文件路径 | `./page-upload-progress.json` |
 | `--log-file <file>` | 上传日志文件路径 | `./logs/page-upload.log` |
 | `--resume <file>` | 从进度文件恢复 | - |
