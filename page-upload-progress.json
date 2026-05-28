@@ -1,32 +1,39 @@
 {
-  "taskId": "20260528144935",
+  "taskId": "20260528163424",
   "taskType": "page",
   "sourceType": "directory",
   "sourceDir": "C:\\Users\\rukee\\Documents\\ai用\\ai\\wiki-dnd-parser\\output",
   "manifestPath": null,
-  "startTime": "2026-05-28T14:49:35.661Z",
+  "startTime": "2026-05-28T16:34:24.458Z",
   "totalFiles": 61,
   "pendingFiles": [],
   "completed": [
+    "Data:contents/book/AAG.json",
+    "Data:contents/book/AATM.json",
+    "Data:contents/book/AL.json",
     "Data:contents/book/ABH.json",
+    "Data:contents/book/AI.json",
     "Data:contents/book/AWM.json",
+    "Data:contents/book/BMT.json",
+    "Data:contents/book/BAM.json",
     "Data:contents/book/CaBoMP.json",
-    "Data:contents/book/DMG.json",
+    "Data:contents/book/BGG.json",
     "Data:contents/book/DoD.json",
+    "Data:contents/book/DMG.json",
     "Data:contents/book/DMTCRG.json",
     "Data:contents/book/EFA.json",
-    "Data:contents/book/FRHoF.json",
     "Data:contents/book/EGW.json",
-    "Data:contents/book/ERLW.json",
     "Data:contents/book/FRAiF.json",
+    "Data:contents/book/ERLW.json",
     "Data:contents/book/FTD.json",
-    "Data:contents/book/HAT-TG.json",
+    "Data:contents/book/FRHoF.json",
     "Data:contents/book/GGR.json",
-    "Data:contents/book/HF.json",
-    "Data:contents/book/LFL.json",
+    "Data:contents/book/HAT-TG.json",
     "Data:contents/book/HFFotM.json",
-    "Data:contents/book/MCV4EC.json",
+    "Data:contents/book/LFL.json",
+    "Data:contents/book/HF.json",
     "Data:contents/book/MaBJoV.json",
+    "Data:contents/book/MCV4EC.json",
     "Data:contents/book/MGELFT.json",
     "Data:contents/book/MM.json",
     "Data:contents/book/MOT.json",
@@ -35,74 +42,34 @@
     "Data:contents/book/MTF.json",
     "Data:contents/book/NF.json",
     "Data:contents/book/OGA.json",
+    "Data:contents/book/PaF.json",
     "Data:contents/book/PHB.json",
     "Data:contents/book/PS-A.json",
-    "Data:contents/book/PaF.json",
     "Data:contents/book/PS-D.json",
     "Data:contents/book/PS-I.json",
     "Data:contents/book/PS-K.json",
     "Data:contents/book/PS-X.json",
-    "Data:contents/book/PS-Z.json",
     "Data:contents/book/RMR.json",
+    "Data:contents/book/PS-Z.json",
     "Data:contents/book/SAC.json",
     "Data:contents/book/SatO.json",
     "Data:contents/book/SCAG.json",
     "Data:contents/book/SCC.json",
     "Data:contents/book/Screen.json",
-    "Data:contents/book/ScreenSpelljammer.json",
     "Data:contents/book/ScreenDungeonKit.json",
-    "Data:contents/book/TCE.json",
+    "Data:contents/book/ScreenSpelljammer.json",
     "Data:contents/book/ScreenWildernessKit.json",
+    "Data:contents/book/TCE.json",
     "Data:contents/book/TD.json",
     "Data:contents/book/VGM.json",
-    "Data:contents/book/XGE.json",
     "Data:contents/book/VRGR.json",
+    "Data:contents/book/XGE.json",
+    "Data:contents/book/XDMG.json",
+    "Data:contents/book/XMM.json",
     "Data:contents/book/XPHB.json",
     "Data:contents/book/XSAC.json",
-    "Data:contents/book/XMM.json",
     "Data:contents/book/XScreen.json"
   ],
-  "failed": [
-    {
-      "file": "Data:contents/book/AAG.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    },
-    {
-      "file": "Data:contents/book/AATM.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    },
-    {
-      "file": "Data:contents/book/AL.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    },
-    {
-      "file": "Data:contents/book/AI.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    },
-    {
-      "file": "Data:contents/book/BAM.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    },
-    {
-      "file": "Data:contents/book/BGG.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    },
-    {
-      "file": "Data:contents/book/BMT.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    },
-    {
-      "file": "Data:contents/book/XDMG.json",
-      "error": "json-error-syntax: Syntax error",
-      "attempts": 1
-    }
-  ],
-  "lastUpdated": "2026-05-28T14:49:38.968Z"
+  "failed": [],
+  "lastUpdated": "2026-05-28T16:34:26.939Z"
 }

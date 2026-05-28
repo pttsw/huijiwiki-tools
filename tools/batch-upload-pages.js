@@ -21,6 +21,7 @@ function parseArgs(args) {
     overwrite: false,
     concurrency: null,
     extensions: null,
+    file: null,
     help: false
   };
 
@@ -79,6 +80,14 @@ function parseArgs(args) {
           : null;
         i++;
         break;
+      case '--file':
+        options.file = next;
+        i++;
+        break;
+      case '-f':
+        options.file = next;
+        i++;
+        break;
       case '-h':
       case '--help':
         options.help = true;
@@ -91,11 +100,11 @@ function parseArgs(args) {
 
 function validateInputMode(options) {
   if (options.source && options.manifest) {
-    throw new Error('source and manifest are mutually exclusive');
+    throw new Error('source 和 manifest 参数不能同时使用');
   }
 
-  if (!options.source && !options.manifest && !options.resume && !options.retryFailed) {
-    throw new Error('source or manifest is required');
+  if (!options.source && !options.manifest && !options.resume && !options.retryFailed && !options.file) {
+    throw new Error('需要提供 source、manifest 或 file 参数');
   }
 }
 
@@ -105,6 +114,24 @@ function resolveSourcePath(options, config) {
   }
   
   const rootPath = config?.pageUpload?.rootPath;
+  
+  if (options.file) {
+    if (!rootPath || !fs.existsSync(rootPath)) {
+      throw new Error(`根路径未配置或不存在。无法使用 --file 参数。`);
+    }
+    
+    const targetFolderPath = path.join(rootPath, options.file);
+    if (!fs.existsSync(targetFolderPath)) {
+      throw new Error(`文件夹 "${options.file}" 在根路径 "${rootPath}" 中不存在。`);
+    }
+    
+    if (!fs.statSync(targetFolderPath).isDirectory()) {
+      throw new Error(`"${options.file}" 不是一个目录。`);
+    }
+    
+    return rootPath;
+  }
+  
   if (rootPath && fs.existsSync(rootPath)) {
     return rootPath;
   }
@@ -141,33 +168,36 @@ function getPageExtensions(options, config) {
 
 function printHelp() {
   console.log(`
-Batch Upload Pages to HuijiWiki
+批量上传页面到慧技Wiki
 
-Usage:
-  node tools/batch-upload-pages.js [options]
+用法:
+  node tools/batch-upload-pages.js [选项]
 
-Options:
-  -s, --source <dir>        Source directory containing page files
-  -m, --manifest <file>     JSON manifest containing page title/content entries
-  -c, --config <file>       Config file path (default: ./config/upload.config.json)
-  --progress-file <file>    Progress file path (default: ./page-upload-progress.json)
-  --log-file <file>         Upload log file path (default: ./logs/page-upload.log)
-  --resume <file>          Resume from a progress file
-  --retry-failed <file>   Retry only failed items from a progress file
-  --dry-run                 Preview without uploading
-  --overwrite               Overwrite existing pages instead of skipping them
-  --concurrency <n>         Number of concurrent uploads
-  --extensions <list>       Directory-mode file extensions, comma-separated
-  -h, --help                Show this help message
+选项:
+  -s, --source <目录>        目录文件模式输入目录
+  -m, --manifest <文件>      JSON清单模式输入文件
+  -c, --config <文件>        配置文件路径（默认: ./config/upload.config.json）
+  --progress-file <文件>       进度文件路径（默认: ./page-upload-progress.json）
+  --log-file <文件>           上传日志文件路径（默认: ./logs/page-upload.log）
+  --resume <文件>             从进度文件恢复上传
+  --retry-failed <文件>      重试失败的文件
+  --dry-run                  预览模式，不实际执行上传
+  --overwrite                覆盖已存在的页面而不是跳过
+  --concurrency <数量>        并发上传数量
+  --extensions <列表>          目录模式的文件扩展名，逗号分隔
+  --file <文件夹>             只上传指定文件夹的文件（需要配置rootPath）
+  -f <文件夹>                --file 的简写形式
+  -h, --help                 显示帮助信息
 
-Note:
-  If --source can be omitted if rootPath is configured in config.
+说明:
+  如果配置了 rootPath，可以省略 --source 参数。
+  使用 --file 可以只上传指定文件夹的文件。如果文件夹不存在，会报错。
 `);
 }
 
 function loadConfig(configPath) {
   if (!fs.existsSync(configPath)) {
-    throw new Error(`Config file not found: ${configPath}`);
+    throw new Error(`配置文件未找到: ${configPath}`);
   }
 
   return JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -178,23 +208,23 @@ function printProgress(event) {
 
   switch (event.type) {
     case 'uploading':
-      console.log(`[${now}] Uploading: ${event.file}`);
+      console.log(`[${now}] 正在上传: ${event.file}`);
       break;
     case 'success':
-      console.log(`[${now}] ✓ Success: ${event.file}`);
+      console.log(`[${now}] ✓ 成功: ${event.file}`);
       break;
     case 'skip':
-      console.log(`[${now}] ○ Skipped: ${event.file} (${event.reason})`);
+      console.log(`[${now}] ○ 跳过: ${event.file} (${event.reason})`);
       break;
     case 'error':
-      console.log(`[${now}] ✗ Failed: ${event.file} - ${event.message}`);
+      console.log(`[${now}] ✗ 失败: ${event.file} - ${event.message}`);
       break;
     case 'dry-run':
-      console.log(`[${now}] [DRY-RUN] ${event.file}`);
+      console.log(`[${now}] [预览模式] ${event.file}`);
       console.log(`          -> ${event.title}`);
-      console.log(`          Exists: ${event.exists}`);
-      console.log(`          Action: ${event.action}`);
-      console.log(`          ContentLength: ${event.contentLength}`);
+      console.log(`          已存在: ${event.exists}`);
+      console.log(`          操作: ${event.action}`);
+      console.log(`          内容长度: ${event.contentLength}`);
       break;
   }
 }
@@ -204,7 +234,7 @@ function requireHuijiWiki() {
     return require('huijiwiki-api').HuijiWiki;
   } catch (error) {
     throw new Error(
-      'Missing dependency "huijiwiki-api". Run npm install before actual uploads.'
+      '缺少依赖 "huijiwiki-api"。请在执行上传前运行 npm install。'
     );
   }
 }
@@ -406,7 +436,8 @@ function loadItemsForNewTask(options, config) {
         extensions: getPageExtensions(options, config),
         skipFolders: config.skipFolders || [],
         enableParentPage: config?.pageUpload?.enableParentPage ?? true,
-        excludeParentPagePaths: config?.pageUpload?.excludeParentPagePaths || []
+        excludeParentPagePaths: config?.pageUpload?.excludeParentPagePaths || [],
+        filterFolder: options.file || null
       }),
       sourceDir: actualSource,
       metadata: {
@@ -460,7 +491,8 @@ async function main() {
     extensions: getPageExtensions(options, config),
     skipFolders: config.skipFolders || [],
     enableParentPage: config?.pageUpload?.enableParentPage ?? true,
-    excludeParentPagePaths: config?.pageUpload?.excludeParentPagePaths || []
+    excludeParentPagePaths: config?.pageUpload?.excludeParentPagePaths || [],
+    filterFolder: options.file || null
   };
 
   if (options.resume) {
@@ -513,7 +545,7 @@ async function main() {
   }
 
   if (items.length === 0) {
-    console.log('No pages to process. Exiting.');
+    console.log('没有页面需要处理。退出。');
     process.exit(0);
   }
 
@@ -523,17 +555,17 @@ async function main() {
     const HuijiWiki = requireHuijiWiki();
     wiki = new HuijiWiki(config.wiki.prefix, config.wiki.authKey);
 
-    console.log(`Connecting to wiki: ${config.wiki.prefix}`);
-    console.log('Logging in...');
+    console.log(`正在连接到 Wiki: ${config.wiki.prefix}`);
+    console.log('正在登录...');
 
     const loginSuccess = await loginWithDiagnostics(wiki, config.auth.username, config.auth.password, {
       logRawResponse: message => console.log(message)
     });
     if (!loginSuccess) {
-      throw new Error(`Login failed: ${wiki.getLastErrorMessage()}`);
+      throw new Error(`登录失败: ${wiki.getLastErrorMessage()}`);
     }
   } else {
-    console.log('[DRY-RUN MODE] No actual page uploads will be performed');
+    console.log('[预览模式] 不会实际执行上传操作');
   }
 
   const result = await processPageQueue(wiki, items, config, tracker, uploadLog, {
@@ -543,53 +575,51 @@ async function main() {
     onProgress: printProgress
   });
 
-  console.log('\n========== Page Upload Complete ==========');
-  console.log(`Completed: ${result.completed}`);
-  console.log(`Skipped (already exists): ${result.skipped}`);
-  console.log(`Failed: ${result.failed}`);
+  console.log('\n========== 页面上传完成 ==========');
+  console.log(`完成: ${result.completed}`);
+  console.log(`跳过: ${result.skipped}`);
+  console.log(`失败: ${result.failed}`);
   
   const hasErrors = (result.failedFiles && result.failedFiles.length > 0) || 
                     (result.skippedFiles && result.skippedFiles.length > 0);
   
   if (!hasErrors) {
-    console.log('\n✅ All files uploaded successfully!');
+    console.log('\n✅ 所有文件上传成功！');
     return;
   }
   
   console.log('\n──────────────────────────────────────────────');
-  console.log('❌ UNUPLOADED FILES REPORT');
+  console.log('❌ 未上传文件报告');
   console.log('──────────────────────────────────────────────');
   
-  // 处理跳过的文件（如太大的文件）
   if (result.skippedFiles && result.skippedFiles.length > 0) {
-    console.log(`\n⚠️  SKIPPED FILES (${result.skippedFiles.length}):`);
+    console.log(`\n⚠️  跳过的文件 (${result.skippedFiles.length}):`);
     
     const tooLargeFiles = result.skippedFiles.filter(f => f.category === 'Too large');
     if (tooLargeFiles.length > 0) {
-      console.log(`  -- Content too large (413) --`);
+      console.log(`  -- 内容太大 (413) --`);
       for (const file of tooLargeFiles) {
         const sizeStr = file.contentLength ? `(${Math.round(file.contentLength / 1024)} KB)` : '';
         console.log(`  • ${file.title} ${sizeStr}`);
-        console.log(`    Reason: ${file.error}`);
+        console.log(`    原因: ${file.error}`);
       }
     }
     
     const otherSkipped = result.skippedFiles.filter(f => f.category !== 'Too large');
     if (otherSkipped.length > 0) {
-      console.log(`  -- Other skipped --`);
+      console.log(`  -- 其他跳过 --`);
       for (const file of otherSkipped) {
         const sizeStr = file.contentLength ? `(${Math.round(file.contentLength / 1024)} KB)` : '';
         console.log(`  • ${file.title} ${sizeStr}`);
-        console.log(`    Reason: ${file.error}`);
+        console.log(`    原因: ${file.error}`);
       }
     }
   }
   
   // 处理失败的文件
   if (result.failedFiles && result.failedFiles.length > 0) {
-    console.log(`\n❌ FAILED FILES (${result.failedFiles.length}):`);
+    console.log(`\n❌ 失败的文件 (${result.failedFiles.length}):`);
     
-    // 按错误类型分组
     const errorGroups = {};
     for (const file of result.failedFiles) {
       const key = file.error.substring(0, 60);
@@ -610,25 +640,25 @@ async function main() {
       }
     }
     
-    console.log('\nDetailed error list:');
+    console.log('\n详细错误列表:');
     for (const file of result.failedFiles) {
       const sizeStr = file.contentLength ? `(${Math.round(file.contentLength / 1024)} KB)` : '';
       console.log(`  • ${file.title} ${sizeStr}`);
-      console.log(`    Error: ${file.error}`);
+      console.log(`    错误: ${file.error}`);
     }
   }
   
   console.log('\n──────────────────────────────────────────────');
   const totalUnuploaded = (result.failedFiles?.length || 0) + (result.skippedFiles?.length || 0);
   if (totalUnuploaded > 0) {
-    console.log(`📝 ${totalUnuploaded} file(s) were not uploaded successfully.`);
-    console.log('💡 You can use --retry-failed to retry failed files.');
+    console.log(`📝 共 ${totalUnuploaded} 个文件未成功上传。`);
+    console.log('💡 你可以使用 --retry-failed 重试失败的文件。');
   }
 }
 
 if (require.main === module) {
   main().catch(error => {
-    console.error('Unexpected error:', error.message);
+    console.error('意外错误:', error.message);
     process.exit(1);
   });
 }
