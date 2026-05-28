@@ -15,8 +15,13 @@
     "comment": "Batch JSON page upload",
     "maxConcurrency": 5,
     "defaultExtensions": [".json"],
+<<<<<<< HEAD
     "skipExisting": true,
     "rootPath": "/output",
+=======
+    "skipExisting": false,
+    "rootPath": "wiki-dnd-parser/output",
+>>>>>>> c1e85a5 (初始化一下json)
     "enableParentPage": true,
     "excludeParentPagePaths": [
 		"collection",

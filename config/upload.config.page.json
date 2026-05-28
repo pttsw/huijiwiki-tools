@@ -15,8 +15,13 @@
     "comment": "Batch page upload",
     "maxConcurrency": 5,
     "defaultExtensions": [".txt", ".wiki", ".wikitext", ".md"],
+<<<<<<< HEAD
     "skipExisting": true,
     "rootPath": "/output_page",
+=======
+    "skipExisting": false,
+    "rootPath": "wiki-dnd-parser/output_page",
+>>>>>>> c1e85a5 (初始化一下json)
     "enableParentPage": true,
     "excludeParentPagePaths": ["扩展/", "模组/"]
   },
