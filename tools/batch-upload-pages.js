@@ -256,6 +256,9 @@ function printProgress(event) {
       console.log(`          已存在: ${event.exists}`);
       console.log(`          操作: ${event.action}`);
       console.log(`          内容长度: ${event.contentLength}`);
+      if (event.isPublicationHomePage) {
+        console.log(`          出版物首页: 是`);
+      }
       break;
   }
 }
@@ -285,7 +288,11 @@ async function uploadSinglePage(wiki, item, options, summary) {
 
   try {
     const exists = wiki ? await pageExists(wiki, normalizedTitle) : false;
-    const action = decidePageAction({ exists, overwrite: options.overwrite });
+    const action = decidePageAction({ 
+      exists, 
+      overwrite: options.overwrite,
+      isPublicationHomePage: item.isPublicationHomePage 
+    });
 
     if (options.dryRun) {
       return {
@@ -295,13 +302,18 @@ async function uploadSinglePage(wiki, item, options, summary) {
           normalizedTitle,
           exists,
           action,
-          content: item.content
+          content: item.content,
+          isPublicationHomePage: item.isPublicationHomePage
         })
       };
     }
 
     if (action === 'skip') {
-      return { success: true, skipped: true, message: 'Already exists' };
+      let message = 'Already exists';
+      if (item.isPublicationHomePage && exists) {
+        message = 'Already exists (Publication Home Page, always skip)';
+      }
+      return { success: true, skipped: true, message };
     }
 
     const result = await wiki.editPage(normalizedTitle, item.content, {
