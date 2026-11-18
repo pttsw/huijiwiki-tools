@@ -136,18 +136,25 @@ function loadConfig(configPath) {
   if (fs.existsSync(authConfigPath)) {
     try {
       const authConfig = JSON.parse(fs.readFileSync(authConfigPath, 'utf8'));
-      
-      // 检查是否是默认值，如果是，则从 authConfig 替换
-      const isDefaultWikiConfig = config.wiki?.prefix === 'dnd5e' || 
-                                  config.wiki?.authKey === 'your-auth-key-here';
-      const isDefaultAuthConfig = config.auth?.username?.includes('YourUsername@BotName') || 
-                                  config.auth?.password === 'your-bot-password';
-      
+
+      // wiki 部分为默认值时替换
+      const isDefaultWikiConfig = !config.wiki ||
+                                  config.wiki?.prefix === 'dnd5e' ||
+                                  config.wiki?.authKey === 'your-auth-key-here' ||
+                                  !config.wiki?.prefix ||
+                                  !config.wiki?.authKey;
       if (isDefaultWikiConfig && authConfig.wiki) {
-        config.wiki = authConfig.wiki;
+        config.wiki = { ...authConfig.wiki, ...config.wiki };
       }
+
+      // auth 部分为默认值（占位符、缺失或为空）时替换
+      const auth = config.auth || {};
+      const isDefaultAuthConfig = !auth.username ||
+                                  !auth.password ||
+                                  auth.username?.includes('YourUsername@BotName') ||
+                                  auth.password === 'your-bot-password';
       if (isDefaultAuthConfig && authConfig.auth) {
-        config.auth = authConfig.auth;
+        config.auth = { ...authConfig.auth, ...config.auth };
       }
     } catch (error) {
       console.warn(`读取认证配置文件时出错: ${error.message}`);
@@ -259,11 +266,17 @@ async function main() {
     }
 
     console.log(`Scanning source directory: ${options.source}`);
-    const skipFolders = config.skipFolders || [];
+    const skipConfig = config.skip || {};
+    const skipFolders = [...(config.skipFolders || []), ...(skipConfig.folders || [])];
+    const skipFiles = skipConfig.files || [];
     if (skipFolders.length > 0) {
       console.log(`Skipping folders: ${skipFolders.join(', ')}`);
     }
-    const images = collectImages(options.source, skipFolders);
+    if (skipFiles.length > 0) {
+      console.log(`Skipping files: ${skipFiles.join(', ')}`);
+    }
+    const skipOptions = { folders: skipFolders, files: skipFiles };
+    const images = collectImages(options.source, skipOptions);
     console.log(`Found ${images.length} images`);
 
     if (images.length === 0) {

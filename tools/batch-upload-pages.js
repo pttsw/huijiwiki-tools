@@ -643,7 +643,7 @@ async function refreshWikiPagesAfterJsonUpload(wiki, uploadedJsonPaths, jsonConf
 }
 
 function loadItemsForNewTask(options, config) {
-  // update-only 模式：只上传 replace-logs.json 中记录的已更改文件
+  // update-only 模式：只上传记录文件中已更改的文件
   if (options.updateOnly) {
     const rootPath = config?.pageUpload?.rootPath;
     if (!rootPath || !fs.existsSync(rootPath)) {
@@ -652,21 +652,22 @@ function loadItemsForNewTask(options, config) {
 
     const changedResult = loadChangedFilesList(rootPath);
     if (changedResult === null) {
-      throw new Error(`在 ${rootPath} 中未找到 replace-logs.json 文件。--update-only 模式需要此文件。`);
+      throw new Error(`在 ${rootPath} 中未找到 replace-logs.json 或 updated-wiki-files.json 文件。--update-only 模式需要其中之一。`);
     }
 
-    const { files: changedFiles, log: changeLog } = changedResult;
+    const { files: changedFiles, log: changeLog, logFile } = changedResult;
+    const displayName = logFile || '记录文件';
 
     if (changedFiles.length === 0) {
-      console.log('[update-only 模式] replace-logs.json 中没有记录已更改的文件。');
+      console.log(`[update-only 模式] ${displayName} 中没有记录已更改的文件。`);
       return { items: [], sourceDir: rootPath, metadata: { taskType: 'page', sourceType: 'directory' } };
     }
 
     const generatedAt = changeLog.generatedAt || '未知时间';
-    const inputCommit = changeLog.inputCommit || '未知';
-    console.log(`[update-only 模式] 从 replace-logs.json 加载了 ${changedFiles.length} 个已更改文件`);
+    const inputCommit = changeLog.inputCommit || changeLog.count || '未知';
+    console.log(`[update-only 模式] 从 ${displayName} 加载了 ${changedFiles.length} 个已更改文件`);
     console.log(`  生成时间: ${generatedAt}`);
-    console.log(`  输入提交: ${inputCommit}`);
+    console.log(`  记录数量: ${inputCommit}`);
 
     return {
       items: loadPagesByRelativePaths(rootPath, changedFiles, {

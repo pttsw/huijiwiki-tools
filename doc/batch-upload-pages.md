@@ -6,6 +6,7 @@
 
 - 支持目录文件模式：一个文件对应一个 wiki 页面
 - 支持 JSON 清单模式：显式提供 `title` 与 `content`
+- 支持只上传更新页面模式（`--update-only`）：仅上传 `replace-logs.json` 中记录的已更改文件
 - 默认安全策略：页面已存在时跳过
 - 支持 `--overwrite` 显式覆盖
 - 支持 dry-run 预览标题规范化与上传决策
@@ -67,6 +68,8 @@ cp config/upload.config.example.json config/upload.config.json
 npm run get:json
 # 预览
 npm run get:json:dry-run
+# 只上传有更新的json文件
+npm run get:json:update
 # 指定子文件夹上传
 npm run get:json -- --file <folder>
 
@@ -74,6 +77,8 @@ npm run get:json -- --file <folder>
 npm run get:page
 # 预览
 npm run get:page:dry-run
+# 只上传有更新的普通文件
+npm run get:page:update
 # 指定子文件夹上传
 npm run get:page -- --file <folder>
 ```
@@ -103,7 +108,50 @@ node tools/batch-upload-pages.js
 | `法术/火球术.txt` | `法术/火球术` |
 | `spells/FTD/Ashardalon's Stride.wiki` | `spells/FTD/Ashardalon's Stride` |
 
-### JSON 清单模式
+### 只上传更新页面模式（update-only）
+
+该模式仅上传 `replace-logs.json` 中记录的已更改文件，适用于数据/页面内容更新后只同步变更项的增量上传场景。
+
+#### 前置条件
+
+- 已配置 `pageUpload.rootPath`
+- 根目录中存在由数据生成工具产出的 `replace-logs.json`，其记录格式如下：
+
+```json
+{
+  "generatedAt": "2026-11-17T12:00:00.000Z",
+  "inputCommit": "abc12345",
+  "changedOutputFiles": [
+    { "filePath": "spells/Fireball.wiki" },
+    { "filePath": "bestiary/Dragon.wiki" }
+  ]
+}
+```
+
+工具会读取其中 `changedOutputFiles[].filePath` 作为待上传文件列表。
+
+#### 用法
+
+```bash
+# 只上传有更新的文件（使用默认配置）
+node tools/batch-upload-pages.js --update-only -c ./config/upload.config.json
+
+# 预览哪些文件将被上传
+node tools/batch-upload-pages.js --update-only --dry-run -c ./config/upload.config.json
+```
+
+也提供了内置 npm 脚本（基于 json 上传配置）：
+
+```bash
+# 上传有更新的 json 文件
+npm run get:json:update
+# 预览
+npm run get:json:update:dry-run
+```
+
+> 说明：此模式下无需提供 `-s`/`-m` 参数，路径来自 `pageUpload.rootPath`。若根目录下找不到 `replace-logs.json` 或其中没有记录的已更改文件，工具会打印提示并退出。
+
+## JSON 清单模式
 
 ```bash
 node tools/batch-upload-pages.js -m ./pages.json -c ./config/upload.config.json
@@ -181,6 +229,7 @@ node tools/batch-upload-pages.js --retry-failed ./page-upload-progress.json
 | `--overwrite` | 页面存在时执行覆盖 | `false` |
 | `--concurrency <n>` | 并发上传数 | `pageUpload.maxConcurrency` 或 `1` |
 | `--extensions <list>` | 目录模式文件扩展名列表，逗号分隔 | `pageUpload.defaultExtensions` |
+| `--update-only` | 只上传 `replace-logs.json` 中记录的已更改文件（需配置 `pageUpload.rootPath`） | `false` |
 | `-h, --help` | 显示帮助信息 | - |
 
 ## 页面标题规范化

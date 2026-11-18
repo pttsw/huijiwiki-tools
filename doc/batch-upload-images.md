@@ -49,9 +49,14 @@ cp config/upload.config.example.json config/upload.config.json
     "spells": "法术",
     ...
   },
-  "skipFolders": ["docker"]
+  "skip": {
+    "folders": ["docker"],
+    "files": ["old-banner.png"]
+  }
 }
 ```
+
+> **注意**：`auth.username` / `auth.password`（以及 `wiki.prefix` / `wiki.authKey`）若为默认占位符（如 `your-bot-password`）、缺失或为空，会自动回退读取同目录 `config/upload.auth.json` 中的值。
 
 ### 配置说明
 
@@ -64,7 +69,8 @@ cp config/upload.config.example.json config/upload.config.json
 | `upload.comment` | 上传时的编辑摘要 |
 | `upload.maxConcurrency` | 最大并发上传数（默认 10） |
 | `categoryMapping` | 一级文件夹的中英文分类映射表 |
-| `skipFolders` | 需要跳过的文件夹列表（如 `docker`） |
+| `skip.folders` | 需要跳过的文件夹列表（如 `docker`），支持原名或相对路径 |
+| `skip.files` | 需要跳过的文件列表（如 `old-banner.png`），支持文件名或相对路径 |
 
 ### 分类映射表
 

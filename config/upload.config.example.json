@@ -49,5 +49,8 @@
     "variantrules": "术语",
     "vehicles": "载具"
   },
-  "skipFolders": ["docker"]
+  "skip": {
+    "folders": ["docker"],
+    "files": []
+  }
 }
