@@ -78,6 +78,44 @@ function normalizeConcurrency(value) {
   return Number.isFinite(value) ? Math.max(1, Math.floor(value)) : null;
 }
 
+function normalizePathForMatch(value) {
+  return (value || '').replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase();
+}
+
+const HOMEBREW_IMG_ROOT = 'd:/homebrew-img';
+
+/**
+ * 读取 config/upload.config.output.json 中 pageUpload.rootPath 下的
+ * non-partnered-sources.json，返回其中记载的非合作方来源列表
+ * @returns {Array<string>} 非合作方来源列表
+ */
+function loadNonPartneredSources() {
+  const outputConfigPath = path.join(__dirname, '..', 'config', 'upload.config.output.json');
+  if (!fs.existsSync(outputConfigPath)) {
+    return [];
+  }
+  try {
+    const outputConfig = JSON.parse(fs.readFileSync(outputConfigPath, 'utf8'));
+    const rootPath = outputConfig?.pageUpload?.rootPath;
+    if (!rootPath) {
+      return [];
+    }
+    const nonPartneredPath = path.join(rootPath, 'non-partnered-sources.json');
+    if (!fs.existsSync(nonPartneredPath)) {
+      return [];
+    }
+    const data = JSON.parse(fs.readFileSync(nonPartneredPath, 'utf8'));
+    const sources = Array.isArray(data?.sources) ? data.sources.filter(s => typeof s === 'string' && s) : [];
+    if (sources.length > 0) {
+      console.log(`[非合作方资源] 从 ${nonPartneredPath} 加载 ${sources.length} 个来源，将跳过这些来源的图片`);
+    }
+    return sources;
+  } catch (error) {
+    console.warn(`读取 non-partnered-sources.json 失败: ${error.message}`);
+    return [];
+  }
+}
+
 function resolveConcurrency(requestedConcurrency, config) {
   const normalizedRequested = normalizeConcurrency(requestedConcurrency);
   const configMax = normalizeConcurrency(
@@ -269,6 +307,24 @@ async function main() {
     const skipConfig = config.skip || {};
     const skipFolders = [...(config.skipFolders || []), ...(skipConfig.folders || [])];
     const skipFiles = skipConfig.files || [];
+
+    // 上传路径为 D:\homebrew-img 时，实际图片位于其 img 子目录，
+    // 同时读取 output 目录中 non-partnered-sources.json 记载的非合作方来源并跳过
+    let scanSource = options.source;
+    if (normalizePathForMatch(options.source) === HOMEBREW_IMG_ROOT) {
+      const imgDir = path.join(options.source, 'img');
+      if (fs.existsSync(imgDir)) {
+        scanSource = imgDir;
+        console.log(`检测到 homebrew-img 目录，图片源目录: ${imgDir}`);
+      }
+      const nonPartnered = loadNonPartneredSources();
+      for (const src of nonPartnered) {
+        if (!skipFolders.some(f => normalizePathForMatch(f) === normalizePathForMatch(src))) {
+          skipFolders.push(src);
+        }
+      }
+    }
+
     if (skipFolders.length > 0) {
       console.log(`Skipping folders: ${skipFolders.join(', ')}`);
     }
@@ -276,7 +332,7 @@ async function main() {
       console.log(`Skipping files: ${skipFiles.join(', ')}`);
     }
     const skipOptions = { folders: skipFolders, files: skipFiles };
-    const images = collectImages(options.source, skipOptions);
+    const images = collectImages(scanSource, skipOptions);
     console.log(`Found ${images.length} images`);
 
     if (images.length === 0) {
@@ -292,11 +348,12 @@ async function main() {
       filesToProcess = filesToProcess.filter(f => !uploadLog.isUploaded(f));
     }
 
-    tracker.init(options.source, filesToProcess, {
+    tracker.init(scanSource, filesToProcess, {
       taskType: 'image',
       sourceType: 'directory'
     });
     console.log(`Task ${tracker.data.taskId} created: ${filesToProcess.length} files to upload`);
+    sourceDir = scanSource;
   }
 
   if (filesToProcess.length === 0) {
