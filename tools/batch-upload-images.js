@@ -19,6 +19,7 @@ function parseArgs(args) {
     resume: null,
     retryFailed: null,
     dryRun: false,
+    updateOnly: false,
     concurrency: null,
     help: false
   };
@@ -57,6 +58,9 @@ function parseArgs(args) {
       case '--dry-run':
         options.dryRun = true;
         break;
+      case '--update-only':
+        options.updateOnly = true;
+        break;
       case '--concurrency':
         {
           const parsed = Number.parseInt(next, 10);
@@ -83,6 +87,7 @@ function normalizePathForMatch(value) {
 }
 
 const HOMEBREW_IMG_ROOT = 'd:/homebrew-img';
+const IMG_REPLACE_FILE = 'img-replace.json';
 
 /**
  * 读取 config/upload.config.output.json 中 pageUpload.rootPath 下的
@@ -116,6 +121,91 @@ function loadNonPartneredSources() {
   }
 }
 
+/**
+ * 仅上传已更新文件模式（--update-only）：
+ * 扫描指定目录第一层是否有 img-replace.json。
+ * 有则只上传其中 folders（整个文件夹内的图片）与 files（个别文件）记载的更新文件。
+ * @param {Object} options - 命令行选项（含 source）
+ * @returns {{sourceDir: string, images: Array<{absolutePath: string, relativePath: string}>}}
+ */
+function loadUpdateImages(options) {
+  const sourceArg = options.source;
+  const replaceFilePath = path.join(sourceArg, IMG_REPLACE_FILE);
+
+  if (!fs.existsSync(replaceFilePath)) {
+    throw new Error(`在指定目录第一层未找到 ${IMG_REPLACE_FILE}: ${replaceFilePath}`);
+  }
+
+  let jsonData;
+  try {
+    jsonData = JSON.parse(fs.readFileSync(replaceFilePath, 'utf8'));
+  } catch (error) {
+    throw new Error(`读取 ${replaceFilePath} 失败: ${error.message}`);
+  }
+
+  const folders = Array.isArray(jsonData.folders)
+    ? jsonData.folders.filter(s => typeof s === 'string' && s.trim())
+    : [];
+  const files = Array.isArray(jsonData.files)
+    ? jsonData.files.filter(s => typeof s === 'string' && s.trim())
+    : [];
+
+  if (folders.length === 0 && files.length === 0) {
+    throw new Error(`[update-only 模式] ${replaceFilePath} 中的 folders 与 files 均为空`);
+  }
+
+  // 解析图片根目录（与普通模式相同的 homebrew-img 特殊处理）
+  let imageRoot = sourceArg;
+  if (normalizePathForMatch(sourceArg) === HOMEBREW_IMG_ROOT) {
+    const imgDir = path.join(sourceArg, 'img');
+    if (fs.existsSync(imgDir)) {
+      imageRoot = imgDir;
+      console.log(`检测到 homebrew-img 目录，图片源目录: ${imgDir}`);
+    }
+  }
+
+  const images = [];
+  const seen = new Set();
+
+  function addImage(absolutePath, relativePath) {
+    const normalizedRel = relativePath.replace(/\\/g, '/');
+    if (seen.has(normalizedRel)) {
+      return;
+    }
+    seen.add(normalizedRel);
+    images.push({ absolutePath, relativePath: normalizedRel });
+  }
+
+  // 1) folders：整文件夹内的所有受支持图片（视为新增或全部有更新）
+  for (const folder of folders) {
+    const folderFull = path.join(imageRoot, folder);
+    if (!fs.existsSync(folderFull) || !fs.statSync(folderFull).isDirectory()) {
+      console.warn(`[update-only 模式] 警告: 记录中的文件夹不存在，已跳过: ${folder}`);
+      continue;
+    }
+    const folderImages = collectImages(folderFull, {});
+    if (folderImages.length === 0) {
+      console.warn(`[update-only 模式] 警告: 记录中的文件夹内没有受支持的图片: ${folder}`);
+    }
+    for (const img of folderImages) {
+      addImage(img.absolutePath, `${folder}/${img.relativePath}`);
+    }
+  }
+
+  // 2) files：单独列出的更新图片文件
+  for (const relativeFile of files) {
+    const normalizedFile = relativeFile.replace(/\\/g, '/').replace(/^\/+/, '');
+    const absolutePath = path.join(imageRoot, normalizedFile);
+    if (!fs.existsSync(absolutePath)) {
+      console.warn(`[update-only 模式] 警告: 记录中的文件不存在，已跳过: ${normalizedFile}`);
+      continue;
+    }
+    addImage(absolutePath, normalizedFile);
+  }
+
+  return { sourceDir: imageRoot, images };
+}
+
 function resolveConcurrency(requestedConcurrency, config) {
   const normalizedRequested = normalizeConcurrency(requestedConcurrency);
   const configMax = normalizeConcurrency(
@@ -144,6 +234,7 @@ Options:
   --resume <file>           Resume from a progress file
   --retry-failed <file>     Retry only failed files from a progress file
   --dry-run                 Preview without uploading
+  --update-only             Only upload updated files recorded in img-replace.json
   --concurrency <n>         Number of concurrent uploads (default: config upload.maxConcurrency or 1)
   -h, --help                Show this help message
 
@@ -153,6 +244,9 @@ Examples:
 
   # Dry run to preview
   node tools/batch-upload-images.js -s ./images --dry-run
+
+  # Only upload updated files recorded in <dir>/img-replace.json
+  node tools/batch-upload-images.js -s ./images --update-only
 
   # Resume interrupted task
   node tools/batch-upload-images.js --resume ./upload-progress.json
@@ -263,6 +357,7 @@ async function main() {
   const uploadLog = new UploadLog(options.logFile);
 
   let filesToProcess = [];
+  let updateImages = null;
   let sourceDir = options.source;
 
   if (options.resume) {
@@ -291,6 +386,50 @@ async function main() {
     data.failed = [];
     tracker.save();
     console.log(`Retrying ${filesToProcess.length} failed files from task ${data.taskId}`);
+  } else if (options.updateOnly) {
+    if (!options.source) {
+      console.error('Error: --source is required for --update-only mode');
+      printHelp();
+      process.exit(1);
+    }
+
+    if (!fs.existsSync(options.source)) {
+      console.error(`Source directory not found: ${options.source}`);
+      process.exit(1);
+    }
+
+    let updateResult;
+    try {
+      updateResult = loadUpdateImages(options);
+    } catch (err) {
+      console.error(`[update-only 模式] ${err.message}`);
+      uploadLog.logError(err.message);
+      process.exit(1);
+    }
+
+    if (updateResult.images.length === 0) {
+      console.log(`[update-only 模式] ${IMG_REPLACE_FILE} 中没有记载可上传的文件。`);
+      process.exit(0);
+    }
+
+    updateImages = updateResult;
+    const uniqueTargets = [];
+    const seen = new Set();
+    for (const img of updateResult.images) {
+      const target = transformPath(img.relativePath);
+      if (!seen.has(target)) {
+        seen.add(target);
+        uniqueTargets.push(target);
+      }
+    }
+    filesToProcess = uniqueTargets;
+    sourceDir = updateResult.sourceDir;
+
+    tracker.init(sourceDir, filesToProcess, {
+      taskType: 'image',
+      sourceType: 'update-only'
+    });
+    console.log(`[update-only 模式] 从 ${path.join(options.source, IMG_REPLACE_FILE)} 加载了 ${filesToProcess.length} 个待更新文件`);
   } else {
     if (!options.source) {
       console.error('Error: --source is required for new upload task');
@@ -395,7 +534,8 @@ async function main() {
     {
       concurrency: options.concurrency,
       dryRun: options.dryRun,
-      onProgress: printProgress
+      onProgress: printProgress,
+      ...(options.updateOnly ? { imageFiles: updateImages.images, skipUploaded: false } : {})
     }
   );
 

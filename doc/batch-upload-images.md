@@ -12,6 +12,7 @@
 - 支持并发上传
 - 可配置跳过特定文件夹
 - dry-run 预览模式
+- 仅上传已更新文件模式（`--update-only`）：只上传 `img-replace.json` 记载的更新文件
 
 ## 安装
 
@@ -145,6 +146,51 @@ node tools/batch-upload-images.js --resume ./upload-progress.json
 node tools/batch-upload-images.js --retry-failed ./upload-progress.json
 ```
 
+### 仅上传已更新文件模式（--update-only）
+
+适用于源仓库更新后只需**增量上传**的场景（例如某个扩展/来源更新了图片）：只上传 `img-replace.json` 中记载的更新过的文件，避免全量重新扫描上传。
+
+使用前会扫描源目录**第一层**是否存在 `img-replace.json`：
+
+- 不存在：在控制台报错，同时写入上传日志（`ERROR` 行），并以非零码退出
+- 存在：只上传其中记载的文件，其余文件一律不处理
+
+```bash
+node tools/batch-upload-images.js -s ./images --update-only
+
+# 或
+npm run upload:update -- -s ./images
+```
+
+`img-replace.json` 格式：
+
+```json
+{
+  "repo": "……",
+  "folders": [
+    "races"
+  ],
+  "files": [
+    "backgrounds/forest.png"
+  ]
+}
+```
+
+| 字段 | 作用 |
+|------|------|
+| `repo` | 仓库标识，仅作元信息记录，不参与上传逻辑 |
+| `folders` | 新增或全部有更新的文件夹列表；其中所有受支持格式（webp/png/jpg/gif/svg/bmp/ico）的图片都会被递归收集并上传 |
+| `files` | 单独列出的更新图片文件，为相对源目录的路径；文件不存在时会输出警告并跳过 |
+
+行为约定：
+
+- **路径转换与分类标签**与普通模式完全一致（如 `races/MM/Dragon.png` → `races-MM-Dragon.png`，分类自动带上二级文件夹 `MM` 及对应中文分类）
+- **以 `img-replace.json` 为准**：不再应用配置中的 `skip` 文件夹过滤
+- **不受上传日志去重限制**：列表中每个文件都会尝试上传；内容与维基现有文件一致时由媒体库以 `fileexists-no-change` 自动跳过，内容有变化的同名文件会覆盖更新
+- **支持 `--dry-run`**：`node tools/batch-upload-images.js -s ./images --update-only --dry-run` 可先预览本次更新将处理的文件、转换结果和分类标签
+- **支持断点续传与失败重试**：`--resume ./upload-progress.json`、`--retry-failed ./upload-progress.json` 均可用于该模式
+- 若源目录为 `D:\homebrew-img`，会自动切换到其 `img` 子目录作为图片根目录，`img-replace.json` 仍位于源目录第一层
+
 ### 并发上传
 
 设置并发数提高上传速度，且不会超过配置中的 `upload.maxConcurrency`：
@@ -164,6 +210,7 @@ node tools/batch-upload-images.js -s ./images --concurrency 3
 | `--resume <file>` | 从进度文件恢复 | - |
 | `--retry-failed <file>` | 重试失败的文件 | - |
 | `--dry-run` | 预览模式，不实际上传 | `false` |
+| `--update-only` | 仅上传 `img-replace.json` 记载的更新文件 | `false` |
 | `--concurrency <n>` | 并发上传数（不超过 `upload.maxConcurrency`） | `upload.maxConcurrency` 或 `1` |
 | `-h, --help` | 显示帮助信息 | - |
 
